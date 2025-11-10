@@ -1,0 +1,33 @@
+{
+  "name": "tuan-escrow-contract",
+  "version": "0.1.15",
+  "license": "MIT",
+  "main": "./dist/index.cjs",
+  "browser": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "type": "module",
+   "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+   "files": [
+    "dist/**"
+  ],
+  "scripts": {
+    "build": "npx tsup src/index.ts --format esm,cjs --dts"
+  },
+   "devDependencies": {
+    "eslint": "^8.57.0",
+    "tsup": "^8.0.2",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "@meshsdk/common": "1.8.14",
+    "@meshsdk/core": "1.8.14",
+    "dotenv": "^17.2.3"
+  }
+}

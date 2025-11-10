@@ -1,0 +1,26 @@
+name = "aiken-lang/aladin-core"
+version = "0.0.0"
+compiler = "v1.1.19"
+plutus = "v3"
+license = "Apache-2.0"
+description = "Aladin escow contract"
+
+[repository]
+user = "aiken-lang"
+project = "aladin-core"
+platform = "github"
+
+[[dependencies]]
+name = "aiken-lang/stdlib"
+version = "2.2.0"
+source = "github"
+
+[[dependencies]]
+name = "sidan-lab/vodka"   
+version = "0.1.1-beta"
+source = "github"
+
+[[dependencies]]
+name = "logicalmechanism/assist"
+version = "v0.5.1"
+source = "github"

@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "declaration": true,
+    "esModuleInterop": true,
+    "incremental": false,
+    "isolatedModules": true,
+     "outDir": "./dist",
+    "lib": [
+      "ES2020",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "module": "ESNext",
+    "target": "ESNext",
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "typeRoots": ["./types", "./node_modules/@types"],
+    "moduleResolution": "node"
+  },
+  "include": ["src/index.ts"],
+  "exclude": ["node_modules", "dist"]
+}
