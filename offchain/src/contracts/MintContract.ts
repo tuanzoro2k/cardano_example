@@ -3,8 +3,8 @@ import {
     CIP68_100,
     CIP68_222,
     deserializeAddress,
-    mConStr,
     mConStr0,
+    mConStr1,
     MeshTxBuilder,
     MeshWallet,
     metadataToCip68,
@@ -14,78 +14,128 @@ import {
     UTxO,
 } from "@meshsdk/core";
 import blueprint from "../../plutus.json";
-
 import { applyParamsToScript } from "@meshsdk/core";
 import { MeshTxInitiator, MeshTxInitiatorInput } from "../core/transaction-builder";
 import dotenv from "dotenv";
 dotenv.config();
-
-// type MeshData =
-//   | number
-//   | string
-//   | MeshData[]
-//   | { type: "Map"; entries: [MeshData, MeshData][] }
-//   | { type: "Mesh"; content: { alternative: number; fields: MeshData[] } };
-
-// export const metadataToCip68 = (metadata: any): MeshData => {
-//   if (metadata === null || metadata === undefined) {
-//     throw new Error("Invalid metadata value");
-//   }
-
-//   // Arrays -> convert recursively
-//   if (Array.isArray(metadata)) {
-//     return metadata.map((item) => metadataToCip68(item));
-//   }
-
-//   // Objects -> convert to Map
-//   if (typeof metadata === "object") {
-//     const entries: [MeshData, MeshData][] = Object.entries(metadata).map(
-//       ([key, value]) => [
-//         { type: "Bytes", content: key },       // keys as bytes
-//         metadataToCip68(value),               // recursive conversion
-//       ]
-//     );
-//     return { type: "Map", entries };
-//   }
-
-//   // Strings -> encode as bytes
-//   if (typeof metadata === "string") {
-//     return { type: "Bytes", content: metadata };
-//   }
-
-//   // Numbers -> keep as-is
-//   if (typeof metadata === "number" || typeof metadata === "bigint") {
-//     return metadata;
-//   }
-
-//   throw new Error(`Unsupported metadata type: ${typeof metadata}`);
-// };
 
 export class MintContract extends MeshTxInitiator {
     scriptCbor: string;
     scriptStoreCbor: string;
     scriptAddress: string;
     scriptStoreAddress: string;
-
     policyId: string;
-    constructor(inputs: MeshTxInitiatorInput) {
+    hotKeyHash: string;
+    cip68ScriptHash: string;
+
+    constructor(inputs: MeshTxInitiatorInput & { hotKeyHash?: string }) {
         super(inputs);
-        this.scriptCbor = this.getScriptCbor();
+
+        // If hotKeyHash is provided, use it
+        this.hotKeyHash = inputs.hotKeyHash || "";
+
+        // Initialize scripts
+        this.scriptStoreCbor = "";
+        this.cip68ScriptHash = "";
+        this.scriptCbor = "";
+        this.scriptAddress = "";
+        this.scriptStoreAddress = "";
+        this.policyId = "";
+    }
+
+    async initialize() {
+        // STEP 1: Get wallet address and extract hot key hash if not provided
+        if (!this.hotKeyHash) {
+            const walletAddress = await this.getWalletDappAddress();
+            if (!walletAddress) {
+                throw new Error("Could not get wallet address");
+            }
+
+            const addressDetails = deserializeAddress(walletAddress);
+            this.hotKeyHash = addressDetails.pubKeyHash;
+        }
+        console.log("🔑 Hot Key Hash:", this.hotKeyHash);
+
+        // STEP 2: Get store script CBOR (no parameters)
         this.scriptStoreCbor = this.getScriptStoreCbor();
+
+        // STEP 3: Get store script hash
+        this.cip68ScriptHash = resolveScriptHash(this.scriptStoreCbor, "V3");
+        console.log("📦 CIP68 Store Script Hash:", this.cip68ScriptHash);
+
+        // STEP 4: Apply parameters to mint script
+        this.scriptCbor = this.getScriptCbor();
+        console.log("📜 Mint Script CBOR length:", this.scriptCbor.length);
+
+        // STEP 5: Calculate policy ID and addresses
+        this.policyId = resolveScriptHash(this.scriptCbor, "V3");
         this.scriptAddress = this.getScriptAddress(this.scriptCbor);
         this.scriptStoreAddress = this.getStoreAddress(this.scriptStoreCbor);
-        this.policyId = resolveScriptHash(this.scriptCbor, "V3")
-    }
 
-    getScriptCbor = () => {
-        const mintValidator = blueprint.validators.find(v => v.title === "cip68/mint.mint.mint");
-        return applyParamsToScript(mintValidator.compiledCode, []);
-    };
+        console.log("🎫 Policy ID:", this.policyId);
+        console.log("📍 Mint Script Address:", this.scriptAddress);
+        console.log("📍 Store Address:", this.scriptStoreAddress);
+
+        return this;
+    }
 
     getScriptStoreCbor = () => {
-        const storeValidator = blueprint.validators.find(v => v.title === "cip68/store.store.spend");
+        const storeValidator = blueprint.validators.find(
+            v => v.title === "cip68/store.store.spend"
+        );
+        if (!storeValidator) {
+            throw new Error("Store validator not found in blueprint");
+        }
+
+        console.log("📄 Store validator found:", storeValidator.title);
+
+        // Check if store validator has parameters
+        const hasParams = storeValidator.parameters && storeValidator.parameters.length > 0;
+        console.log("   Has parameters:", hasParams);
+
+        // Apply empty parameters if none needed
         return applyParamsToScript(storeValidator.compiledCode, []);
-    }
+    };
+
+    getScriptCbor = () => {
+        const mintValidator = blueprint.validators.find(
+            v => v.title === "cip68/mint.mint.mint"
+        );
+        if (!mintValidator) {
+            throw new Error("Mint validator not found in blueprint");
+        }
+
+        console.log("📄 Mint validator found:", mintValidator.title);
+        console.log("   Parameters:", mintValidator.parameters);
+
+        // Check the expected parameter types from blueprint
+        if (mintValidator.parameters && mintValidator.parameters.length > 0) {
+            console.log("   Expected parameter count:", mintValidator.parameters.length);
+            mintValidator.parameters.forEach((param: any, idx: number) => {
+                console.log(`   Param ${idx}: ${param.title} (${param.schema?.$ref || param.schema?.type})`);
+            });
+        }
+
+        // Apply parameters in correct format
+        // MeshJS expects parameters as hex strings
+        const params = [
+            this.hotKeyHash,      // VerificationKeyHash (already hex)
+            this.cip68ScriptHash, // ScriptHash (already hex)
+        ];
+
+        console.log("   Applying parameters:");
+        console.log("   - hotKeyHash:", this.hotKeyHash);
+        console.log("   - cip68ScriptHash:", this.cip68ScriptHash);
+
+        try {
+            const compiled = applyParamsToScript(mintValidator.compiledCode, params);
+            console.log("   ✅ Parameters applied successfully");
+            return compiled;
+        } catch (error) {
+            console.error("   ❌ Failed to apply parameters:", error);
+            throw error;
+        }
+    };
 
     getScriptAddress = (scriptCbor: string) => {
         return serializePlutusScript(
@@ -93,7 +143,7 @@ export class MintContract extends MeshTxInitiator {
             undefined,
             0
         ).address;
-    }
+    };
 
     getStoreAddress = (scriptStoreCbor: string) => {
         return serializePlutusScript(
@@ -101,7 +151,7 @@ export class MintContract extends MeshTxInitiator {
             undefined,
             0
         ).address;
-    }
+    };
 
     getWalletInfoForTx = async () => {
         const utxos = await this.wallet?.getUtxos();
@@ -117,7 +167,7 @@ export class MintContract extends MeshTxInitiator {
             throw new Error("No wallet address found");
         }
         return { utxos, collateral, walletAddress };
-    }
+    };
 
     getWalletCollateral = async (): Promise<UTxO> => {
         if (this.wallet) {
@@ -141,102 +191,254 @@ export class MintContract extends MeshTxInitiator {
         return "";
     };
 
-    getAddressUTXOAsset = async (address: string, unit: string) => {
-        const utxos = await this.fetcher?.fetchAddressUTxOs(address, unit);
-        if (!utxos || utxos.length === 0) {
-            throw new Error("No UTxO found for the given asset at the address");
+    getStoreUtxoByTxHash = async (txHash: string) => {
+        const utxos = await this.fetcher?.fetchUTxOs(txHash);
+        if (!utxos || utxos.length === 0) throw new Error("No UTxOs found");
+
+        const storeUtxo = utxos.find(
+            (u) => u.output.address === this.scriptStoreAddress
+        );
+
+        if (!storeUtxo) {
+            throw new Error("No store UTxO found for given txHash (must be script address)");
         }
-        return utxos[utxos.length - 1];
+        return storeUtxo;
     };
 
-    mint = async (params: { assetName: string; metadata: Record<string, string>; quantity: string; receiver: string; }, utxosInput?: UTxO[],) => {
+
+    mint = async (params: {
+        assetName: string;
+        metadata: Record<string, string>;
+    }) => {
         const { utxos, walletAddress, collateral } = await this.getWalletInfoForTx();
-        // if (utxosInput != null && utxosInput != undefined && Array.isArray(utxosInput)) {
-        //     utxosInput.forEach((utxo) => {
-        //         unsignedTx.txIn(utxo.input.txHash, utxo.input.outputIndex);
-        //     });
-        // }
+
+        console.log("\n🏗️  Building transaction...");
+        console.log("   Wallet:", walletAddress);
+        console.log("   UTXOs available:", utxos.length);
+        console.log("   First UTXO:", utxos[0]?.input.txHash);
+
         const datum = metadataToCip68(params.metadata);
-        console.log(datum);
+        console.log("   Datum created");
 
-        // const metadataEntries = Object.entries(params.metadata).map(([key, value]) => [
-        //     stringToHex(key),
-        //     stringToHex(value)
-        // ]);
+        // Generate CIP-68 asset names
+        const nftAssetName = CIP68_222(stringToHex(params.assetName));
+        const refAssetName = CIP68_100(stringToHex(params.assetName));
 
-        // const cip68Datum = mConStr(0, [
-        //     metadataEntries,  // metadata as array of [key, value] pairs
-        //     1,                // version
-        //     []                // extra (empty list)
-        // ]);
+        console.log("   NFT asset name:", nftAssetName);
+        console.log("   Ref asset name:", refAssetName);
 
-        await this.mesh.txIn(utxos[0]?.input.txHash!,
-            utxos[0]?.input.outputIndex!,
-            utxos[0]?.output.amount!,
-            utxos[0]?.output.address!)
-
+        await this.mesh
+            .txIn(
+                utxos[0]?.input.txHash!,
+                utxos[0]?.input.outputIndex!,
+                utxos[0]?.output.amount!,
+                utxos[0]?.output.address!
+            )
+            // Mint the Reference token FIRST (important for Aiken's minting.exact checks)
             .mintPlutusScriptV3()
-            .mint("1", this.policyId, CIP68_222(stringToHex(params.assetName)))
+            .mint("1", this.policyId, refAssetName)
             .mintingScript(this.scriptCbor)
             .mintRedeemerValue(mConStr0([]))
+            // Then mint the NFT
             .mintPlutusScriptV3()
-            .mint("1", this.policyId, CIP68_100(stringToHex(params.assetName)))
+            .mint("1", this.policyId, nftAssetName)
             .mintingScript(this.scriptCbor)
             .mintRedeemerValue(mConStr0([]))
+            // Send reference token to store with inline datum
+            .txOut(this.scriptStoreAddress, [
+                {
+                    unit: this.policyId + refAssetName,
+                    quantity: "1",
+                },
+            ])
+            .txOutInlineDatumValue(datum)
+            // Change goes back to wallet
+            .changeAddress(walletAddress)
+            .selectUtxosFrom(utxos)
+            // CRITICAL: Must sign with the hot key
+            .requiredSignerHash(deserializeAddress(walletAddress).pubKeyHash)
+            .txInCollateral(
+                collateral.input.txHash,
+                collateral.input.outputIndex,
+                collateral.output.amount,
+                collateral.output.address
+            )
+            .complete();
+
+        console.log("   ✅ Transaction built successfully\n");
+        return this.mesh.txHex;
+    };
+    burn = async (params: {
+        assetName: string;
+        txHash: string;
+    }) => {
+        const { utxos, walletAddress, collateral } = await this.getWalletInfoForTx();
+
+        console.log("\n🏗️  Building transaction...");
+        console.log("   Wallet:", walletAddress);
+        console.log("   UTXOs available:", utxos.length);
+
+        const storeUtxo = await this.getStoreUtxoByTxHash(params.txHash);
+        console.log("storeUtxo:", storeUtxo.output.address);
+        console.log("expected script address:", this.scriptStoreAddress);
+
+        // Generate CIP-68 asset names
+        const nftAssetName = CIP68_222(stringToHex(params.assetName));
+        const refAssetName = CIP68_100(stringToHex(params.assetName));
+
+        console.log("   NFT asset name:", nftAssetName);
+        console.log("   Ref asset name:", refAssetName);
+
+        await this.mesh
+
+            // Mint the Reference token FIRST (important for Aiken's minting.exact checks)
+            .mintPlutusScriptV3()
+            .mint("-1", this.policyId, refAssetName)
+            .mintingScript(this.scriptCbor)
+            .mintRedeemerValue(mConStr1([]))
+
+
+            .spendingPlutusScriptV3()
+            .txIn(
+                storeUtxo.input.txHash,
+                storeUtxo.input.outputIndex,
+                storeUtxo.output.amount,
+                storeUtxo.output.address
+            )
+            .txInInlineDatumPresent()
+            .txInRedeemerValue(mConStr1([]))
+            .txInScript(this.scriptStoreCbor)
+            // Change goes back to wallet
+            .changeAddress(walletAddress)
+            .selectUtxosFrom(utxos)
+            // CRITICAL: Must sign with the hot key
+            .requiredSignerHash(deserializeAddress(walletAddress).pubKeyHash)
+            .txInCollateral(
+                collateral.input.txHash,
+                collateral.input.outputIndex,
+                collateral.output.amount,
+                collateral.output.address
+            )
+            .complete();
+
+        console.log("   ✅ Transaction built successfully\n");
+        return this.mesh.txHex;
+    };
+
+    updateMetadata = async (params: {
+        txHash: string;
+        assetName: string;
+        metadata: Record<string, string>;
+    }) => {
+        const { utxos, walletAddress, collateral } = await this.getWalletInfoForTx();
+        const storeUtxo = await this.getStoreUtxoByTxHash(params.txHash);
+        await this.mesh
+            .spendingPlutusScriptV3()
+            .txIn(storeUtxo.input.txHash, storeUtxo.input.outputIndex)
+            .txInInlineDatumPresent()
+            .txInRedeemerValue(mConStr0([]))
+            .txInScript(this.scriptStoreCbor)
             .txOut(this.scriptStoreAddress, [
                 {
                     unit: this.policyId + CIP68_100(stringToHex(params.assetName)),
                     quantity: "1",
                 },
             ])
-            .txOutInlineDatumValue(datum)
+            .txOutInlineDatumValue(metadataToCip68(params.metadata))
             .changeAddress(walletAddress)
             .selectUtxosFrom(utxos)
             .requiredSignerHash(deserializeAddress(walletAddress).pubKeyHash)
-            .txInCollateral(collateral.input.txHash, collateral.input.outputIndex, collateral.output.amount, collateral.output.address)
+            .txInCollateral(
+                collateral.input.txHash,
+                collateral.input.outputIndex,
+                collateral.output.amount,
+                collateral.output.address
+            )
             .complete();
-        return this.mesh.txHex
+        return this.mesh.txHex;
     }
 }
 
 async function main() {
-    const assets =
-    {
-        assetName: "1hcd11",
-        quantity: "1",
-        receiver: "addr_test1qzr058he2g4ulqn7pd0xjeejkaa2kmf5ak6aa9psqtycc98y7tj6wypp0ezp257naukqyd6026r32dfzq79anlnf0pes7n99lf",
+    console.log("🚀 Starting CIP-68 Minting Process\n");
+
+    const assets = {
+        assetName: "abc",  // Remove the "1" prefix
         metadata: {
-            name: "hcd #009",
+            name: "hcd #099",
             image: "ipfs://QmQK3ZfKnwg772ZUhSodoyaqTMPazG2Ni3V4ydifYaYzdV",
             mediaType: "image/png",
             description: "Hello world - CIP68",
         },
+    };
+
+    const burnAssets = {
+        assetName: "abc",
+        txHash: "fdb5a1913363b806fc998d357e7d0eddd436be4504215cce821f0dd0cc907809", // Example tx hash
     }
 
-    const provider = new BlockfrostProvider(process.env.BLOCKFROST_API_KEY ? process.env.BLOCKFROST_API_KEY : "");
+    const updateMetadata = {
+        assetName: "abc",
+        txHash: "fdb5a1913363b806fc998d357e7d0eddd436be4504215cce821f0dd0cc907809",
+        metadata: {
+            name: "hcd #099 UPDATED",
+            image: "ipfs://QmQK3ZfKnwg772ZUhSodoyaqTMPazG2Ni3V4ydifYaYzdV",
+            mediaType: "image/png",
+            description: "Hello world - CIP68 UPDATED",
+        }
+    }
+    const provider = new BlockfrostProvider(
+        process.env.BLOCKFROST_API_KEY || ""
+    );
 
     const meshTxBuilder = new MeshTxBuilder({
         fetcher: provider,
         verbose: true,
     });
+
     const wallet = new MeshWallet({
         networkId: 0,
         fetcher: provider,
         submitter: provider,
         key: {
             type: "mnemonic",
-            words: [process.env.MNEMONIC ? process.env.MNEMONIC : ""],
+            words: [process.env.MNEMONIC || ""],
         },
     });
+
     const contract = new MintContract({
         mesh: meshTxBuilder,
         fetcher: provider,
         wallet: wallet,
         networkId: 0,
     });
-    const unsignedTx = await contract.mint(assets);
-    const signedTx = await wallet.signTx(unsignedTx, true);
-    const txHash = await wallet.submitTx(signedTx);
-    console.log("https://preview.cexplorer.io/tx/" + txHash);
+
+    // Initialize the contract (gets hot key and script hashes)
+    console.log("🔧 Initializing contract...\n");
+    await contract.initialize();
+
+    console.log("\n💎 Minting asset:", assets.assetName);
+
+    try {
+        const unsignedTx = await contract.updateMetadata(updateMetadata);
+        console.log("✅ Transaction built");
+
+        const signedTx = await wallet.signTx(unsignedTx, true);
+        console.log("✅ Transaction signed");
+
+        const txHash = await wallet.submitTx(signedTx);
+        console.log("\n🎉 SUCCESS! Transaction submitted!");
+        console.log("🔗 https://preview.cexplorer.io/tx/" + txHash);
+    } catch (error: any) {
+        console.error("\n❌ ERROR:", error.message || error);
+        if (error.data?.message) {
+            console.error("Details:", error.data.message.substring(0, 500));
+        }
+        throw error;
+    }
 }
-main()
+
+main().catch((error) => {
+    console.error("\n💥 Fatal error:", error);
+    process.exit(1);
+});

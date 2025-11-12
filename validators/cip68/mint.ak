@@ -10,6 +10,7 @@ use core/types.{BurnTokens, MintRedeemer, MintTokens}
 use types/cip68.{CIP68}
 use validation/find
 use validation/payout
+use core/common.{is_signed_by,check_asset_mint}
 
 
 // This allows a hot key to mint 1 reference and 1 nft for a cip 68 token or
@@ -36,59 +37,33 @@ validator mint(
     // mint only
     when redeemer is {
       MintTokens -> {
-        // cip68 address know at compile time
+        // // cip68 address know at compile time
         let cip68_addr: Address =
           addresses.create_script_address(cip68_hash, #"")
-        // get first input info from the tx in lexographical order
-        let first_index: Int = find.first_input_index(inputs)
-        let first_tx_hash: TransactionId = find.first_input_txid(inputs)
-        // use the reference prefix
-        let ref_tkn: AssetName =
-          value.unique_token_name(
-            first_tx_hash,
-            first_index,
-            cip68.prefix_100,
-            #"",
-          )
-        // use the nft prefix
-        let nft_tkn: AssetName =
-          value.unique_token_name(
-            first_tx_hash,
-            first_index,
-            cip68.prefix_222,
-            #"",
-          )
         // this should prevent utxos without cip68 datum to go to the cip68 storage contract
         // This Forces An Inline Datum!
         expect _: CIP68 = find.output_datum_by_addr(outputs, cip68_addr)
-        //
-        // The hot key has to sign the tx to mint 1 ref and 1 nft. There
-        // is destination validation for the cip68 token but not for the 
-        // nft. This should allow a lot of flexability.
-        //
+        
         and {
           // cornucopias must sign it
           signing.verify_signature(extra_signatories, hot_key)?,
           // must mint 1 reference token
-          minting.exact(mint, currency_symbol, ref_tkn, 1)?,
-          // the nft can go anywhere; ref must go to metadatum contract
-          // must mint 1 non-fungible token
-          minting.exact(mint, currency_symbol, nft_tkn, 1)?,
-          // reference token must go to cip contract
-          payout.at_least(
-            cip68_addr,
-            assets.from_asset(currency_symbol, ref_tkn, 1),
+          check_asset_mint(
+            mint,
+            currency_symbol,
+            cip68.prefix_100,
+            cip68.prefix_222,
             outputs,
+            cip68_addr,
           )?,
-          
         }
       }
       // burn the ref or the nft or both at the same time
-      BurnTokens -> and {
+      BurnTokens -> {
           // cornucopias must sign it
-          signing.verify_signature(extra_signatories, hot_key)?,
-          // this allows optional burning of either or both
+          // // this allows optional burning of either or both
           or {
+            signing.verify_signature(extra_signatories, hot_key)?,
             // burn only 1 ref token
             minting.by_prefix(mint, currency_symbol, cip68.prefix_100, -1)?,
             // burn only 1 nft
