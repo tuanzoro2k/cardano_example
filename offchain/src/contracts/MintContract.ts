@@ -19,6 +19,7 @@ import { MeshTxInitiator, MeshTxInitiatorInput } from "../core/transaction-build
 import dotenv from "dotenv";
 dotenv.config();
 
+
 export class MintContract extends MeshTxInitiator {
     scriptCbor: string;
     scriptStoreCbor: string;
@@ -226,7 +227,7 @@ export class MintContract extends MeshTxInitiator {
 
         console.log("   NFT asset name:", nftAssetName);
         console.log("   Ref asset name:", refAssetName);
-
+        const receiverWalletAddress = "addr_test1qzr058he2g4ulqn7pd0xjeejkaa2kmf5ak6aa9psqtycc98y7tj6wypp0ezp257naukqyd6026r32dfzq79anlnf0pes7n99lf"
         await this.mesh
             .txIn(
                 utxos[0]?.input.txHash!,
@@ -252,6 +253,10 @@ export class MintContract extends MeshTxInitiator {
                 },
             ])
             .txOutInlineDatumValue(datum)
+            .txOut(receiverWalletAddress, [{
+                unit: this.policyId + nftAssetName,
+                quantity: "1",
+            }])
             // Change goes back to wallet
             .changeAddress(walletAddress)
             .selectUtxosFrom(utxos)
@@ -290,14 +295,6 @@ export class MintContract extends MeshTxInitiator {
         console.log("   Ref asset name:", refAssetName);
 
         await this.mesh
-
-            // Mint the Reference token FIRST (important for Aiken's minting.exact checks)
-            .mintPlutusScriptV3()
-            .mint("-1", this.policyId, refAssetName)
-            .mintingScript(this.scriptCbor)
-            .mintRedeemerValue(mConStr1([]))
-
-
             .spendingPlutusScriptV3()
             .txIn(
                 storeUtxo.input.txHash,
@@ -308,6 +305,12 @@ export class MintContract extends MeshTxInitiator {
             .txInInlineDatumPresent()
             .txInRedeemerValue(mConStr1([]))
             .txInScript(this.scriptStoreCbor)
+            // Mint the Reference token FIRST (important for Aiken's minting.exact checks)
+            .mintPlutusScriptV3()
+            .mint("-1", this.policyId, refAssetName)
+            .mintingScript(this.scriptCbor)
+            .mintRedeemerValue(mConStr1([]))
+
             // Change goes back to wallet
             .changeAddress(walletAddress)
             .selectUtxosFrom(utxos)
@@ -363,7 +366,7 @@ async function main() {
     console.log("🚀 Starting CIP-68 Minting Process\n");
 
     const assets = {
-        assetName: "abc",  // Remove the "1" prefix
+        assetName: "xyz",  // Remove the "1" prefix
         metadata: {
             name: "hcd #099",
             image: "ipfs://QmQK3ZfKnwg772ZUhSodoyaqTMPazG2Ni3V4ydifYaYzdV",
@@ -373,13 +376,13 @@ async function main() {
     };
 
     const burnAssets = {
-        assetName: "abc",
-        txHash: "fdb5a1913363b806fc998d357e7d0eddd436be4504215cce821f0dd0cc907809", // Example tx hash
+        assetName: "xyz",
+        txHash: "0f3deaa7982b4eb5776b355f5590dafb295f108e63d8a202eebe605d68cf2425", // Example tx hash
     }
 
     const updateMetadata = {
-        assetName: "abc",
-        txHash: "fdb5a1913363b806fc998d357e7d0eddd436be4504215cce821f0dd0cc907809",
+        assetName: "xyz",
+        txHash: "0f3deaa7982b4eb5776b355f5590dafb295f108e63d8a202eebe605d68cf2425",
         metadata: {
             name: "hcd #099 UPDATED",
             image: "ipfs://QmQK3ZfKnwg772ZUhSodoyaqTMPazG2Ni3V4ydifYaYzdV",
@@ -420,7 +423,7 @@ async function main() {
     console.log("\n💎 Minting asset:", assets.assetName);
 
     try {
-        const unsignedTx = await contract.updateMetadata(updateMetadata);
+        const unsignedTx = await contract.burn(burnAssets);
         console.log("✅ Transaction built");
 
         const signedTx = await wallet.signTx(unsignedTx, true);
