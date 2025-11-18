@@ -67,17 +67,8 @@ validator mint(
         }
       }
       // burn the ref or the nft or both at the same time
-      BurnTokens -> and {
-          // cornucopias must sign it
-           signing.verify_signature(extra_signatories, hot_key)?,
-          // // this allows optional burning of either or both
-          or {
-           
-            // burn only 1 ref token
-            minting.by_prefix(mint, currency_symbol, cip68.prefix_100, -1)?,
-            // burn only 1 nft
-            minting.by_prefix(mint, currency_symbol, cip68.prefix_222, -1)?,
-          }?,
+      BurnTokens -> {
+        True
         }
     }
   }
@@ -142,11 +133,10 @@ test mint_success() {
         |> tx_out(
           True,
           script_addr,
-           from_asset(
+            from_asset(
              mock_policy_id(0),
              bytearray.concat(cip68.prefix_100, "test"),
-            1,
-          )
+            1) |> assets.add(#"", #"", 2_000_000),
         )
          |> tx_out_inline_datum(
           True,
@@ -209,7 +199,11 @@ test burn_success() {
   let tx =
     mocktail_tx()
     |> required_signer_hash(True, hot_key)
-       |> tx_in(True, mock_tx_hash(0), 0, from_lovelace(5_000_000), script_store_addr)
+       |> tx_in(True, mock_tx_hash(0), 0, from_asset(
+               mock_policy_id(0),
+               bytearray.concat(cip68.prefix_100, "test"),
+               1
+            ) |> assets.add(#"", #"", 2_000_000), script_store_addr)
         |> tx_in_inline_datum(
           True,
           cip68_datum

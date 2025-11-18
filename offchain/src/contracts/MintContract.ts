@@ -13,7 +13,7 @@ import {
     stringToHex,
     UTxO,
 } from "@meshsdk/core";
-import blueprint from "../../plutus.json";
+import blueprint from "../../../plutus.json";
 import { applyParamsToScript } from "@meshsdk/core";
 import { MeshTxInitiator, MeshTxInitiatorInput } from "../core/transaction-builder";
 import dotenv from "dotenv";
@@ -305,11 +305,11 @@ export class MintContract extends MeshTxInitiator {
             .txInInlineDatumPresent()
             .txInRedeemerValue(mConStr1([]))
             .txInScript(this.scriptStoreCbor)
-            // Mint the Reference token FIRST (important for Aiken's minting.exact checks)
             .mintPlutusScriptV3()
             .mint("-1", this.policyId, refAssetName)
             .mintingScript(this.scriptCbor)
             .mintRedeemerValue(mConStr1([]))
+            // .txOut(walletAddress, storeUtxo.output.amount)
 
             // Change goes back to wallet
             .changeAddress(walletAddress)
@@ -377,12 +377,12 @@ async function main() {
 
     const burnAssets = {
         assetName: "xyz",
-        txHash: "0f3deaa7982b4eb5776b355f5590dafb295f108e63d8a202eebe605d68cf2425", // Example tx hash
+        txHash: "7805e9293a02b3c9f4f71d37c1d306240452b88dd0b93c99dedc3ef03e607aa3", // Example tx hash
     }
 
     const updateMetadata = {
         assetName: "xyz",
-        txHash: "0f3deaa7982b4eb5776b355f5590dafb295f108e63d8a202eebe605d68cf2425",
+        txHash: "7805e9293a02b3c9f4f71d37c1d306240452b88dd0b93c99dedc3ef03e607aa3",
         metadata: {
             name: "hcd #099 UPDATED",
             image: "ipfs://QmQK3ZfKnwg772ZUhSodoyaqTMPazG2Ni3V4ydifYaYzdV",
