@@ -18,7 +18,7 @@
     "dist/**"
   ],
   "scripts": {
-    "build": "aiken build",
+    "build": "npx tsup src/index.ts --format esm,cjs --dts",
     "mint": "npx tsx src/contracts/MintContract.ts"
   },
    "devDependencies": {
