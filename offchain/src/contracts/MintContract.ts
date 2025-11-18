@@ -93,9 +93,13 @@ export class MintContract extends MeshTxInitiator {
         // Check if store validator has parameters
         const hasParams = storeValidator.parameters && storeValidator.parameters.length > 0;
         console.log("   Has parameters:", hasParams);
+        console.log("hotKeyHash", this.hotKeyHash)
+        const params = [
+            this.hotKeyHash,      // VerificationKeyHash (already hex)
+        ];
 
         // Apply empty parameters if none needed
-        return applyParamsToScript(storeValidator.compiledCode, []);
+        return applyParamsToScript(storeValidator.compiledCode, [params]);
     };
 
     getScriptCbor = () => {
@@ -309,6 +313,11 @@ export class MintContract extends MeshTxInitiator {
             .mint("-1", this.policyId, refAssetName)
             .mintingScript(this.scriptCbor)
             .mintRedeemerValue(mConStr1([]))
+
+            .mintPlutusScriptV3()
+            .mint("-1", this.policyId, nftAssetName)
+            .mintingScript(this.scriptCbor)
+            .mintRedeemerValue(mConStr1([]))
             // .txOut(walletAddress, storeUtxo.output.amount)
 
             // Change goes back to wallet
@@ -377,12 +386,12 @@ async function main() {
 
     const burnAssets = {
         assetName: "xyz",
-        txHash: "7805e9293a02b3c9f4f71d37c1d306240452b88dd0b93c99dedc3ef03e607aa3", // Example tx hash
+        txHash: "e2073d7aac06150cc52dba448787b40d54d7f10f28c3676be7e4fc9c3f2906e2", // Example tx hash
     }
 
     const updateMetadata = {
         assetName: "xyz",
-        txHash: "7805e9293a02b3c9f4f71d37c1d306240452b88dd0b93c99dedc3ef03e607aa3",
+        txHash: "e2073d7aac06150cc52dba448787b40d54d7f10f28c3676be7e4fc9c3f2906e2",
         metadata: {
             name: "hcd #099 UPDATED",
             image: "ipfs://QmQK3ZfKnwg772ZUhSodoyaqTMPazG2Ni3V4ydifYaYzdV",

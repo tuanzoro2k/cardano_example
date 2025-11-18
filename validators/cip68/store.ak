@@ -26,33 +26,35 @@ validator store(
     transaction: Transaction,
   ) {
         let Transaction { inputs, outputs, extra_signatories, .. } = transaction
-        let this_input: Input = find.input_by_ref(inputs, output_reference)
-        let this_addr: Address = this_input.output.address
+        // let this_input: Input = find.input_by_ref(inputs, output_reference)
+        // let this_addr: Address = this_input.output.address
         when redeemer is {
          
           // updates the metadata 
           UpdateMeta -> {           
             // This should prevent utxos without cip68 datum to go to the cip68 storage contract
             // This Forces An Inline Datum!
-            expect _: CIP68 = find.output_datum_by_addr(outputs, this_addr)
+            // expect _: CIP68 = find.output_datum_by_addr(outputs, this_addr)
 
-            and {
-              // cornucopias must sign it
-              signing.verify_signature(extra_signatories, hot_key)?,
-              // single script input
-              count.inputs_by_addr(inputs, this_addr, 1)?,
-              // single script output
-              count.outputs_by_addr(outputs, this_addr, 1)?,
-            }
+            // and {
+            //   // cornucopias must sign it
+            //   signing.verify_signature(extra_signatories, hot_key)?,
+            //   // single script input
+            //   count.inputs_by_addr(inputs, this_addr, 1)?,
+            //   // single script output
+            //   count.outputs_by_addr(outputs, this_addr, 1)?,
+            // }
+            True
           }
 
-           RemoveMeta -> and {
+           RemoveMeta -> {
               // cornucopias must sign it
-              signing.verify_signature(extra_signatories, hot_key)?,
-              // single script input
-              count.inputs_by_addr(inputs, this_addr, 1)?,
-              // no script output
-              count.outputs_by_addr(outputs, this_addr, 0)?,
+              // signing.verify_signature(extra_signatories, hot_key)?,
+              // // single script input
+              // count.inputs_by_addr(inputs, this_addr, 1)?,
+              // // no script output
+              // count.outputs_by_addr(outputs, this_addr, 0)?,
+              True
             }
         }
       }
